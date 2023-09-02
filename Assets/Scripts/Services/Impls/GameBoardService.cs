@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Controllers;
 using Databases;
-using Databases.Impls;
 using DG.Tweening;
 using Enums;
 using ObjectPooling.Objects;
@@ -19,9 +19,11 @@ namespace Services.Impls
         private readonly ICellPool _cellPool;
         private readonly IObstaclePool _obstaclePool;
         private readonly IGameBoardSettingsDatabase _gameBoardSettingsDatabase;
+        private readonly ISnakeSettingsDatabase _snakeSettingsDatabase;
         private readonly Transform _gameBoardParent;
         private readonly ISnakeSegmentPool _snakeSegmentPool;
         private readonly IFruitPool _fruitPool;
+        private readonly ILevelResultController _levelResultController;
         private readonly CompositeDisposable _disposable = new();
         private readonly List<SnakeSegment> _snakeSegments = new();
         private readonly Queue<Vector2Int> _moveDirectionsQueue = new();
@@ -31,8 +33,9 @@ namespace Services.Impls
         private Vector2Int _snakeMoveDirection = new(0, 1);
         private Fruit _fruit;
         private IDisposable _moveSnakeSubscription;
-        private float _moveInterval = .5f;
-        private float _moveAnimationDuration = 0.2f;
+        private float _moveInterval;
+        private float _moveAnimationDuration;
+        private float _standardBoardItemSize;
 
 
         public GameBoardService
@@ -40,23 +43,31 @@ namespace Services.Impls
             ICellPool cellPool,
             IObstaclePool obstaclePool,
             IGameBoardSettingsDatabase gameBoardSettingsDatabase,
+            ISnakeSettingsDatabase snakeSettingsDatabase,
             Transform gameBoardParent,
             ISnakeSegmentPool snakeSegmentPool,
-            IFruitPool fruitPool
+            IFruitPool fruitPool,
+            ILevelResultController levelResultController
         )
         {
             _cellPool = cellPool;
             _obstaclePool = obstaclePool;
             _gameBoardSettingsDatabase = gameBoardSettingsDatabase;
+            _snakeSettingsDatabase = snakeSettingsDatabase;
             _gameBoardParent = gameBoardParent;
             _snakeSegmentPool = snakeSegmentPool;
             _fruitPool = fruitPool;
+            _levelResultController = levelResultController;
         }
 
         public void Initialize()
         {
+            _standardBoardItemSize = _gameBoardSettingsDatabase.Settings.StandardBoardItemSize;
+            _moveInterval = _snakeSettingsDatabase.Settings.MoveIntervalS;
+            _moveAnimationDuration = _snakeSettingsDatabase.Settings.MoveAnimationDurationS;
             _gridSize = _gameBoardSettingsDatabase.Settings.GridSize;
             _cells = new Cell[_gridSize, _gridSize];
+
             SpawnBoard();
             SpawnBorder();
             SpawnSnake();
@@ -66,28 +77,14 @@ namespace Services.Impls
 
         public void Dispose() => _disposable?.Dispose();
 
-        public void MoveLeft()
+        public void RotateSnake(ERotationSide rotationSide)
         {
-            var newDirection = Rotate90(_snakeMoveDirection, false);
+            var newDirection = rotationSide == ERotationSide.Right
+                ? Rotate90(_snakeMoveDirection, true)
+                : Rotate90(_snakeMoveDirection, false);
             if (!_moveDirectionsQueue.Contains(newDirection))
                 _moveDirectionsQueue.Enqueue(newDirection);
         }
-
-        public void MoveRight()
-        {
-            var newDirection = Rotate90(_snakeMoveDirection, true);
-            if (!_moveDirectionsQueue.Contains(newDirection))
-                _moveDirectionsQueue.Enqueue(newDirection);
-        }
-
-
-        private Vector2Int Rotate90(Vector2Int direction, bool clockwise)
-        {
-            if (clockwise)
-                return new Vector2Int(direction.y, -direction.x);
-            return new Vector2Int(-direction.y, direction.x);
-        }
-
 
         public void Start()
         {
@@ -106,8 +103,8 @@ namespace Services.Impls
 
             if (nextCellType is ECellType.SnakeSegment or ECellType.Obstacle)
             {
-                Debug.Log("You Lose!");
-                _moveSnakeSubscription?.Dispose();
+                _levelResultController.SetLevelResult(ELevelResultType.Lose);
+                Dispose();
                 return;
             }
 
@@ -126,7 +123,8 @@ namespace Services.Impls
 
                 var index = i;
                 sequence.Join(segment.gameObject.transform.DOMove(
-                        new Vector3(prevSegmentPos.x, 0.5f, prevSegmentPos.y), _moveAnimationDuration)
+                        new Vector3(prevSegmentPos.x, _standardBoardItemSize / 2, prevSegmentPos.y),
+                        _moveAnimationDuration)
                     .OnComplete(() =>
                     {
                         if (index == _snakeSegments.Count - 1)
@@ -136,16 +134,24 @@ namespace Services.Impls
             }
 
             sequence.Join(_snakeSegments[0].gameObject.transform.DOMove(
-                    new Vector3(nextHeadPosition.x, 0.5f, nextHeadPosition.y), _moveAnimationDuration)
+                    new Vector3(nextHeadPosition.x, _standardBoardItemSize / 2, nextHeadPosition.y),
+                    _moveAnimationDuration)
                 .OnComplete(() =>
                 {
                     _cells[_snakeSegments[0].Position.x, _snakeSegments[0].Position.y].Type = ECellType.Empty;
                     _snakeSegments[0].Position = nextHeadPosition;
-                    
+
                     if (nextCellType == ECellType.Fruit) SpawnFruit();
 
                     _cells[nextHeadPosition.x, nextHeadPosition.y].Type = ECellType.SnakeSegment;
                 }));
+        }
+
+        private Vector2Int Rotate90(Vector2Int direction, bool clockwise)
+        {
+            if (clockwise)
+                return new Vector2Int(direction.y, -direction.x);
+            return new Vector2Int(-direction.y, direction.x);
         }
 
 
@@ -159,16 +165,28 @@ namespace Services.Impls
 
 
             var newSegment = _snakeSegmentPool.Spawn(_gameBoardParent);
+            if (newSegment.transform.localScale != Vector3.one * _standardBoardItemSize)
+                throw new Exception(
+                    $"[{nameof(GameBoardService)}] {newSegment} size is not equal to {_gameBoardSettingsDatabase.Settings.StandardBoardItemSize}");
             _snakeSegments.Add(newSegment);
             newSegment.Position = newTailPosition;
-            newSegment.gameObject.transform.position = new Vector3(newTailPosition.x, 0.5f, newTailPosition.y);
+            newSegment.gameObject.transform.position =
+                new Vector3(newTailPosition.x, _standardBoardItemSize / 2, newTailPosition.y);
             _cells[newTailPosition.x, newTailPosition.y].Type = ECellType.SnakeSegment;
 
-            if (_snakeSegments.Count == 10)
+            if (_snakeSegments.Count == _snakeSettingsDatabase.Settings.MaxSize)
             {
-                Debug.Log("You Win!");
-                _moveSnakeSubscription?.Dispose();
+                _levelResultController.SetLevelResult(ELevelResultType.Win);
+                Dispose();
             }
+
+            _moveInterval *= _snakeSettingsDatabase.Settings.FruitSpeedBoostMultiplier;
+            _moveAnimationDuration *= _snakeSettingsDatabase.Settings.FruitSpeedBoostMultiplier;
+
+            _moveSnakeSubscription?.Dispose();
+            _moveSnakeSubscription = Observable.Interval(TimeSpan.FromSeconds(_moveInterval))
+                .Subscribe(_ => MoveSnake())
+                .AddTo(_disposable);
         }
 
         private void SpawnBoard()
@@ -177,6 +195,9 @@ namespace Services.Impls
                 for (var y = 0; y < _gridSize; y++)
                 {
                     var cell = _cellPool.Spawn(_gameBoardParent);
+                    if (cell.transform.localScale != Vector3.one * _standardBoardItemSize)
+                        throw new Exception(
+                            $"[{nameof(GameBoardService)}] {cell} size is not equal to {_gameBoardSettingsDatabase.Settings.StandardBoardItemSize}");
                     var cellObj = cell.gameObject;
                     cellObj.transform.position = new Vector3(x, 0, y);
                     cellObj.transform.rotation = Quaternion.Euler(90, 0, 0);
@@ -193,7 +214,10 @@ namespace Services.Impls
                     if (x == 0 || x == _gridSize - 1 || z == 0 || z == _gridSize - 1)
                     {
                         var obstacle = _obstaclePool.Spawn(_gameBoardParent);
-                        obstacle.gameObject.transform.position = new Vector3(x, 0.5f, z);
+                        if (obstacle.transform.localScale != Vector3.one * _standardBoardItemSize)
+                            throw new Exception(
+                                $"[{nameof(GameBoardService)}] {obstacle} size is not equal to {_gameBoardSettingsDatabase.Settings.StandardBoardItemSize}");
+                        obstacle.gameObject.transform.position = new Vector3(x, _standardBoardItemSize / 2, z);
                         _cells[x, z].Type = ECellType.Obstacle;
                     }
         }
@@ -205,15 +229,21 @@ namespace Services.Impls
 
             _cells[centerX, centerZ].Type = ECellType.SnakeSegment;
             var head = _snakeSegmentPool.Spawn(_gameBoardParent);
+            if (head.transform.localScale != Vector3.one * _standardBoardItemSize)
+                throw new Exception(
+                    $"[{nameof(GameBoardService)}] {head} size is not equal to {_gameBoardSettingsDatabase.Settings.StandardBoardItemSize}");
             _snakeSegments.Add(head);
             head.Position = new Vector2Int(centerX, centerZ);
-            head.gameObject.transform.position = new Vector3(centerX, 0.5f, centerZ);
+            head.gameObject.transform.position = new Vector3(centerX, _standardBoardItemSize / 2, centerZ);
 
             _cells[centerX, centerZ - 1].Type = ECellType.SnakeSegment;
             var snakeSegment = _snakeSegmentPool.Spawn(_gameBoardParent);
+            if (snakeSegment.transform.localScale != Vector3.one * _standardBoardItemSize)
+                throw new Exception(
+                    $"[{nameof(GameBoardService)}] {snakeSegment} size is not equal to {_gameBoardSettingsDatabase.Settings.StandardBoardItemSize}");
             _snakeSegments.Add(snakeSegment);
             snakeSegment.Position = new Vector2Int(centerX, centerZ - 1);
-            snakeSegment.gameObject.transform.position = new Vector3(centerX, 0.5f, centerZ - 1);
+            snakeSegment.gameObject.transform.position = new Vector3(centerX, _standardBoardItemSize / 2, centerZ - 1);
         }
 
         private void SpawnExtraObstacles()
@@ -231,11 +261,11 @@ namespace Services.Impls
 
                 _cells[randomPosition.x, randomPosition.y].Type = ECellType.Obstacle;
                 var obstacle = _obstaclePool.Spawn(_gameBoardParent);
-                obstacle.gameObject.transform.position = new Vector3(randomPosition.x, 0.5f, randomPosition.y);
+                obstacle.gameObject.transform.position =
+                    new Vector3(randomPosition.x, _standardBoardItemSize / 2, randomPosition.y);
             }
         }
-
-
+        
         private void SpawnFruit()
         {
             Vector2Int forbiddenPosition = GetCellInFrontOfSnake();
@@ -249,7 +279,11 @@ namespace Services.Impls
 
             _cells[x, z].Type = ECellType.Fruit;
             _fruit = _fruitPool.Spawn(_gameBoardParent);
-            _fruit.gameObject.transform.position = new Vector3(x, 0.5f, z);
+            if (_fruit.transform.localScale != Vector3.one * _standardBoardItemSize)
+                throw new Exception(
+                    $"[{nameof(GameBoardService)}] {_fruit} size is not equal to {_gameBoardSettingsDatabase.Settings.StandardBoardItemSize}");
+
+            _fruit.gameObject.transform.position = new Vector3(x, _standardBoardItemSize / 2, z);
         }
 
         private Vector2Int GetCellInFrontOfSnake() => _snakeSegments[0].Position + _snakeMoveDirection;

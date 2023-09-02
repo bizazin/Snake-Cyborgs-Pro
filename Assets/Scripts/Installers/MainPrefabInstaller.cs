@@ -1,4 +1,5 @@
 using Controllers;
+using Controllers.Impls;
 using Databases;
 using Databases.Impls;
 using Extensions;
@@ -20,9 +21,12 @@ namespace Installers
         
         [Header("Ui Views")]
         [SerializeField] private InputView _inputView;
+        [SerializeField] private LevelResultView _levelResultView;
         
         [Header("Databases")]
         [SerializeField] private GameBoardSettingsDatabase _gameBoardSettingsDatabase;
+        [SerializeField] private SnakeSettingsDatabase _snakeSettingsDatabase;
+        [SerializeField] private LevelResultDatabase _levelResultDatabase;
 
         
         [Header("Behaviours")] 
@@ -44,6 +48,7 @@ namespace Installers
             var parent = Container.Resolve<CanvasScaler>().transform;
             
             Container.BindView<InputController, InputView>(_inputView, parent);
+            Container.BindView<LevelResultController, LevelResultView>(_levelResultView, parent);
         }
 
         private void BindObjectPools()
@@ -57,6 +62,8 @@ namespace Installers
         private void BindDatabases()
         {            
             Container.Bind<IGameBoardSettingsDatabase>().FromInstance(_gameBoardSettingsDatabase).AsSingle();
+            Container.Bind<ISnakeSettingsDatabase>().FromInstance(_snakeSettingsDatabase).AsSingle();
+            Container.Bind<ILevelResultDatabase>().FromInstance(_levelResultDatabase).AsSingle();
         }
 
         private void BindPool<TItemContract, TPoolConcrete, TPoolContract>(TItemContract prefab, int size)

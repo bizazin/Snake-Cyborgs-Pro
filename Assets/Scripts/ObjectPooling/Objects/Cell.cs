@@ -5,6 +5,6 @@ namespace ObjectPooling.Objects
 {
     public class Cell : MonoBehaviour
     {
-        public ECellType Type;
+        public ECellType Type { get; set; }
     }
 }

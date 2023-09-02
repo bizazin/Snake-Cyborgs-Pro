@@ -1,9 +1,10 @@
+using Enums;
+
 namespace Services
 {
     public interface IGameBoardService
     {
-        void MoveLeft();
-        void MoveRight();
+        void RotateSnake(ERotationSide rotationSide);
         void Start();
     }
 }

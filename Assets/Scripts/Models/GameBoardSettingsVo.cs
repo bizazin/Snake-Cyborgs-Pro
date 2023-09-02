@@ -6,5 +6,6 @@ namespace Models
     public class GameBoardSettingsVo
     {
         public int GridSize;
+        public float StandardBoardItemSize;
     }
 }
