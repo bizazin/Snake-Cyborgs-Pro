@@ -15,3 +15,4 @@ MonoBehaviour:
   _gameBoardSettings:
     GridSize: 22
     StandardBoardItemSize: 1
+    ExtraObstaclesCount: {x: 3, y: 5}
