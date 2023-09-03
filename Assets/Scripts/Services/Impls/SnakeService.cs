@@ -73,7 +73,7 @@ namespace Services.Impls
 
         public void Start()
         {
-            _snakeMoveDirection = new Vector2Int(0, 1);
+            _snakeMoveDirection = Vector2Int.up;
             _moveInterval = _snakeSettingsDatabase.Settings.MoveIntervalS;
             _moveAnimationDuration = _snakeSettingsDatabase.Settings.MoveAnimationDurationS;
             _disposable = new CompositeDisposable();
@@ -103,11 +103,6 @@ namespace Services.Impls
             return new Vector2Int(gridSize / 2, gridSize / 2);
         }
 
-        private void StartMoveSubscription() =>
-            _moveSnakeSubscription = Observable.Interval(TimeSpan.FromSeconds(_moveInterval))
-                .Subscribe(_ => MoveSnake())
-                .AddTo(_disposable);
-
         private void SpawnSnakeSegment(Vector2Int position)
         {
             _cells[position.x, position.y].Type = ECellType.SnakeSegment;
@@ -118,7 +113,7 @@ namespace Services.Impls
             segment.Position = position;
             segment.gameObject.transform.position = new Vector3(position.x, _standardBoardItemSize / 2, position.y);
         }
-        
+
         private void MoveSnake()
         {
             if (_moveDirectionsQueue.Any())
@@ -236,5 +231,10 @@ namespace Services.Impls
 
             _moveSnakeSubscription?.Dispose();
         }
+
+        private void StartMoveSubscription() =>
+            _moveSnakeSubscription = Observable.Interval(TimeSpan.FromSeconds(_moveInterval))
+                .Subscribe(_ => MoveSnake())
+                .AddTo(_disposable);
     }
 }
