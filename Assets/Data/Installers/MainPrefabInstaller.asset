@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 030ec0deaf114ae7a98bcc6b9db6790d, type: 3}
+  m_Name: MainPrefabInstaller
+  m_EditorClassIdentifier: 
+  _canvas: {fileID: 7639541237202281361, guid: fff7a856e9f9b8d428286d79be151039, type: 3}
+  _inputView: {fileID: 5747108072151194255, guid: 7ee17ffbea90b504dba1022464dcf349, type: 3}
+  _levelResultView: {fileID: 3865173154056559891, guid: 74c81cbe8a1607b42b928911a9692cda, type: 3}
+  _gameBoardSettingsDatabase: {fileID: 11400000, guid: 71cc8551841ac854dbfa907ab1850dc5, type: 2}
+  _snakeSettingsDatabase: {fileID: 11400000, guid: d50ce5897b953e141994f569dfbcf7a8, type: 2}
+  _levelResultDatabase: {fileID: 11400000, guid: 76d49d5eff9357a4e9d95068fcbdae66, type: 2}
+  _cell: {fileID: 365811100549036578, guid: 3128261bca53ae4488fb2be4c5cce132, type: 3}
+  _snakeSegment: {fileID: -2287460431916160015, guid: 196c10e344df3c64aa1d2c91c136a611, type: 3}
+  _obstacle: {fileID: 2563578210835282219, guid: 156674cce913f334ab76d1c5b829de8b, type: 3}
+  _fruit: {fileID: -8452075521333234853, guid: f710474a42bb16144b582def7422d68d, type: 3}
